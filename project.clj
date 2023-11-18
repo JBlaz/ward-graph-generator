@@ -7,5 +7,6 @@
   :dependencies [[org.clojure/clojure "1.10.3"]
                  [org.clojure/data.json "1.0.0"]
                  [org.clojure/core.async "0.4.500"]
-                 [cheshire "5.10.0"]]
+                 [cheshire "5.10.0"]
+                 [clj-time "0.15.2"]]
   :repl-options {:init-ns ward-graph-generator.core})
