@@ -33,10 +33,10 @@
           callings (:callings first-map)]
       (flatten-children
        (if (not-empty callings)
-         (conj acc callings)
+         (apply conj acc callings)
          acc)
        (if (seq children)
-         (conj rest-map (:children first-map))
+         (apply conj rest-map (:children first-map))
          rest-map)))))
 
 
@@ -45,50 +45,46 @@
     (json/parse-string (slurp reader) true)))
 
 (defn generate-mermaid-code [data]
-  (prn (->> data
-            (flatten-children [])
-            ;; (map #(select-keys % [:children
-            ;;                       :name
-            ;;                       :parentName
-            ;;                       :callings
-            ;;                       :defaultOrgName
-            ;;                       :members
-            ;;                       :firstOrgTypeName
-            ;;                       :classes
-            ;;                       :customOrgName]))
-            ;; (map #(merge % {:callings (map (fn [calling] (select-keys calling [:memberName
-            ;;                                                                    :organization
-            ;;                                                                    :setApartDate
-            ;;                                                                    :position]))
-            ;;                                (:callings %))}))
-            ;; (map #(merge % {:children (map (fn [calling] (select-keys calling [:memberName
-            ;;                                                                    :organization
-            ;;                                                                    :setApartDate
-            ;;                                                                    :position]))
-            ;;                                (:children %))}))
-            ;; second
-            ))
-  (str/join "\n"
-            (flatten ["classDiagram"
-                        ;; (map #(str "  " % "[\"" (-> % str/trim (str/replace "_" " ")) "\"];") org-nodes)
-                        ;; (map #(str "  " % "[\"" (-> % str/trim (str/replace "_" " ")) "\"];") calling-nodes)
-                      (map (fn [thing] (let [org-name (str/replace (:name thing) #" " "_")
-                                             callings (:callings thing)]
-                                         [(str "class `" org-name "`")
-                                          (map (fn [{:keys [position memberName setApartDate]
-                                                     :as   calling}]
-                                                 (if (seq memberName)
-                                                   [(str "class `" position "`{")
-                                                    (str "  Name -- " memberName)
-                                                    (str "  SetApart -- " (if (= 8 (count setApartDate)) (str/join "/" [(subs setApartDate 6 8) (subs setApartDate 4 6) (subs setApartDate 0 4)]) "?")
-                                                         "}")
-                                                    (str org-name " -- `" position "`")]
-                                                   [])) callings)]
-                                              ;; (if (seq (:callings thing))
-                                              ;;   (map #(str "  " org-name " --> " (str/replace (:position %) #" " "_") ";") (:callings thing))
-                                              ;;   [])
-                                         ))
-                           data)])))
+  (let [data    (->> data
+                     (flatten-children [])
+                     (map #(select-keys % [:organization
+                                           :memberName
+                                           :position
+                                           :setApartDate
+                                           :callings
+                                           :defaultOrgName
+                                           :members
+                                           :firstOrgTypeName
+                                           :classes
+                                           :customOrgName])))
+        org-map (reduce (fn [acc {:keys [organization position]}]
+                          (if organization
+                            (assoc acc position organization)
+                            acc)) {} data)
+        combined-data (reduce (fn [acc [position organization]]
+                                (assoc acc organization (reduce (fn [acc n]
+                                                     (if (= organization (:organization n))
+                                                       (conj acc n)
+                                                       acc)) [] data))) {} org-map)]
+    (prn (json/generate-string combined-data))
+    (str/join
+     "\n"
+     (flatten ["classDiagram"
+               (map
+                (fn [{:keys [position memberName setApartDate]}]
+                  (if (seq memberName)
+                    [(str "class `" position "`{")
+                     [(str "  Name -- " memberName)
+                      (str "  SetApart -- " (if (= 8 (count setApartDate)) (str/join "/" [(subs setApartDate 6 8) (subs setApartDate 4 6) (subs setApartDate 0 4)]) "Nope"))]
+                     "}"]
+                    (str "class `" position "`")
+                      ;; []
+                    ))
+                data)
+               (map
+                (fn [[k v]]
+                  (str "`"v "` -- `" k "`"))
+                org-map)]))))
 
 (def json-data (read-json-file "ward.json"))
 
