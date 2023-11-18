@@ -7,21 +7,26 @@
    [clj-time.format :as f]
    ))
 
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (println x "Hello, World!"))
-
-(def top-level-keys
-  [:children
-   :name
-   :parentName
-   :callings
-   :defaultOrgName
-   :members
-   :firstOrgTypeName
-   :classes
-   :customOrgName])
+(defn all-in-one
+  [data org-map]
+  (str/join
+   "\n"
+   (flatten ["classDiagram"
+             (map
+              (fn [{:keys [position memberName setApartDate]}]
+                (if (seq memberName)
+                  [(str "class `" position "`{")
+                   [(str "  Name -- " memberName)
+                    (str "  SetApart -- " (if (= 8 (count setApartDate)) (str/join "/" [(subs setApartDate 6 8) (subs setApartDate 4 6) (subs setApartDate 0 4)]) "Nope"))]
+                   "}"]
+                  (str "class `" position "`")
+                        ;; []
+                  ))
+              data)
+             (map
+              (fn [[k v]]
+                (str "`" v "` -- `" k "`"))
+              org-map)])))
 
 (defn flatten-children
   [acc map-vec]
@@ -66,31 +71,33 @@
                                                      (if (= organization (:organization n))
                                                        (conj acc n)
                                                        acc)) [] data))) {} org-map)]
-    (prn (json/generate-string combined-data))
-    (str/join
-     "\n"
-     (flatten ["classDiagram"
-               (map
-                (fn [{:keys [position memberName setApartDate]}]
-                  (if (seq memberName)
-                    [(str "class `" position "`{")
-                     [(str "  Name -- " memberName)
-                      (str "  SetApart -- " (if (= 8 (count setApartDate)) (str/join "/" [(subs setApartDate 6 8) (subs setApartDate 4 6) (subs setApartDate 0 4)]) "Nope"))]
-                     "}"]
-                    (str "class `" position "`")
-                      ;; []
-                    ))
-                data)
-               (map
-                (fn [[k v]]
-                  (str "`"v "` -- `" k "`"))
-                org-map)]))))
+    ;; (prn (json/generate-string combined-data))
+    ;; (prn combined-data)
+    (str "<html><body><h1>Callings (11/18/23)</h1><pre class=\"mermaid\">\n"
+         (str/join
+          "\n</pre><pre class=\"mermaid\">\n"
+          (map (fn [[org callings]]
+                 (str/join "\n"
+                           (flatten ["classDiagram"
+                                     (str "class `" org "`")
+                                     (:strings (reduce (fn [{:keys [connections strings]} {:keys [position memberName setApartDate]}]
+                                                         (let [connection (str "`" org "` -- `" position "`")]
+                                                           {:strings
+                                                            (apply conj strings [(if (seq memberName)
+                                                                                   [(str "class `" position "`{")
+                                                                                    [(str "  Name -- " memberName)
+                                                                                     (str "  SetApart -- " (if (= 8 (count setApartDate)) (str/join "/" [(subs setApartDate 6 8) (subs setApartDate 4 6) (subs setApartDate 0 4)]) "Nope"))]
+                                                                                    "}"]
+                                                                                   (str "class `" position "`")
+                                                                                   )
+                                                                                 (when-not (connections connection) (str "`" org "` -- `" position "`"))])
+                                                            :connections (conj connections connection)})) {:connections #{} :strings []} callings))]))) combined-data))
+         "\n</pre><script type=\"module\">\nimport mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';\nmermaid.initialize({ startOnLoad: true });\n</script></body></html>")))
 
 (def json-data (read-json-file "ward.json"))
 
 (defn -main
   [& args]
-  (generate-mermaid-code json-data)
-  ;; (println (generate-mermaid-code json-data))
+  ;; (generate-mermaid-code json-data)
+  (spit "index.html" (generate-mermaid-code json-data))
   )
-
