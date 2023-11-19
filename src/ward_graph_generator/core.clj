@@ -3,8 +3,7 @@
    [clojure.string :as str]
    [clojure.java.io :as io]
    [cheshire.core :as json]
-   [clj-time.coerce :as c]
-   [clj-time.format :as f]
+   [ward-graph-generator.text :refer [prefix postfix create-class create-class-name get-date]]
    ))
 
 (defn all-in-one
@@ -52,47 +51,50 @@
 (defn generate-mermaid-code [data]
   (let [data    (->> data
                      (flatten-children [])
-                     (map #(select-keys % [:organization
-                                           :memberName
-                                           :position
-                                           :setApartDate
-                                           :callings
-                                           :defaultOrgName
-                                           :members
-                                           :firstOrgTypeName
-                                           :classes
-                                           :customOrgName])))
+                    ;;  (map #(select-keys % [:organization
+                    ;;                        :memberName
+                    ;;                        :position
+                    ;;                        :setApartDate
+                    ;;                        :callings
+                    ;;                        :defaultOrgName
+                    ;;                        :members
+                    ;;                        :firstOrgTypeName
+                    ;;                        :classes
+                    ;;                        :customOrgName]))
+                     )
         org-map (reduce (fn [acc {:keys [organization position]}]
                           (if organization
                             (assoc acc position organization)
                             acc)) {} data)
-        combined-data (reduce (fn [acc [position organization]]
+        combined-data (reduce (fn [acc [_ organization]]
                                 (assoc acc organization (reduce (fn [acc n]
                                                      (if (= organization (:organization n))
                                                        (conj acc n)
                                                        acc)) [] data))) {} org-map)]
     ;; (prn (json/generate-string combined-data))
-    ;; (prn combined-data)
-    (str "<html><body><h1>Callings (11/18/23)</h1><pre class=\"mermaid\">\n"
+    ;; (prn (first combined-data))
+    (str prefix
          (str/join
           "\n</pre><pre class=\"mermaid\">\n"
           (map (fn [[org callings]]
                  (str/join "\n"
                            (flatten ["classDiagram"
                                      (str "class `" org "`")
-                                     (:strings (reduce (fn [{:keys [connections strings]} {:keys [position memberName setApartDate]}]
+                                     (:strings (reduce (fn [{:keys [connections strings]} {:keys [position memberName setApartDate memberEmail memberPhone]}]
                                                          (let [connection (str "`" org "` -- `" position "`")]
                                                            {:strings
                                                             (apply conj strings [(if (seq memberName)
-                                                                                   [(str "class `" position "`{")
+                                                                                   [(create-class position)
                                                                                     [(str "  Name -- " memberName)
-                                                                                     (str "  SetApart -- " (if (= 8 (count setApartDate)) (str/join "/" [(subs setApartDate 6 8) (subs setApartDate 4 6) (subs setApartDate 0 4)]) "Nope"))]
+                                                                                     (str "  SetApart -- " (get-date setApartDate))
+                                                                                     (str "  Email -- " memberEmail)
+                                                                                     (str "  Phone -- " memberPhone)]
                                                                                     "}"]
-                                                                                   (str "class `" position "`")
+                                                                                   (create-class-name position)
                                                                                    )
                                                                                  (when-not (connections connection) (str "`" org "` -- `" position "`"))])
                                                             :connections (conj connections connection)})) {:connections #{} :strings []} callings))]))) combined-data))
-         "\n</pre><script type=\"module\">\nimport mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';\nmermaid.initialize({ startOnLoad: true });\n</script></body></html>")))
+         postfix)))
 
 (def json-data (read-json-file "ward.json"))
 
